@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import SafariServices
+import UIKit
 
 // MARK: - Root ContentView
 struct ContentView: View {
@@ -8,32 +9,40 @@ struct ContentView: View {
     @State private var isAuthenticated = false
 
     var body: some View {
-        Group {
-            if isAuthenticated {
-                NavigationStack(path: $router.path) {
+        NavigationStack(path: $router.path) {
+            Group {
+                if isAuthenticated {
                     DashboardView()
                         .navigationTitle("BankApp")
                         .navigationBarTitleDisplayMode(.inline)
-                        .navigationDestination(for: AppRoute.self) { route in
-                            switch route {
-                            case .accounts:
-                                AccountsView()
-                            case .transfer:
-                                TransferView()
-                            case .payBills:
-                                PayBillsView()
-                            case .cards:
-                                CardsView()
-                            case .support:
-                                SupportView()
-                            case .settings:
-                                SettingsView()
-                            }
-                        }
+                } else {
+                    LoginView {
+                        isAuthenticated = true
+                    }
+                    .navigationTitle("Welcome")
+                    .navigationBarTitleDisplayMode(.inline)
                 }
-            } else {
-                LoginView {
-                    isAuthenticated = true
+            }
+            .navigationDestination(for: AppRoute.self) { route in
+                switch route {
+                case .accounts:
+                    AccountsView()
+                case .transfer:
+                    TransferView()
+                case .payBills:
+                    PayBillsView()
+                case .cards:
+                    CardsView()
+                case .support:
+                    SupportView()
+                case .settings:
+                    SettingsView()
+                case .createAccount:
+                    CreateAccountView()
+                case .statements:
+                    StatementsView()
+                case .investment:
+                    InvestmentView()
                 }
             }
         }
@@ -102,6 +111,9 @@ enum AppRoute: Hashable {
     case cards
     case support
     case settings
+    case createAccount
+    case statements
+    case investment
 
     var title: String {
         switch self {
@@ -111,6 +123,9 @@ enum AppRoute: Hashable {
         case .cards: return "Cards"
         case .support: return "Support"
         case .settings: return "Settings"
+        case .createAccount: return "Create Account"
+        case .statements: return "Statements"
+        case .investment: return "Investments"
         }
     }
 }
@@ -254,6 +269,15 @@ struct LoginView: View {
             .buttonStyle(.borderedProminent)
             .padding(.horizontal)
 
+            Button {
+                router.confirmThenPush(.createAccount, info: "Start account creation by scanning your HKID or Passport with the camera. This is a simulation.")
+            } label: {
+                Text("Create Account")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .padding(.horizontal)
+
             Spacer()
 
             VStack(spacing: 8) {
@@ -276,10 +300,210 @@ struct LoginView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    router.confirmThenPush(.support, info: "Contact our support team for assistance.")
+                } label: {
+                    Text("Support")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal)
             .padding(.bottom)
         }
+    }
+}
+
+// MARK: - Create Account (Simulation)
+private enum DocumentType { case hkid, passport; var displayName: String { self == .hkid ? "HKID" : "Passport" } }
+
+struct CreateAccountView: View {
+    @EnvironmentObject private var router: Router
+    @State private var showCamera = false
+    @State private var capturedImage: UIImage?
+    @State private var selectedDoc: DocumentType?
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: "person.badge.plus")
+                    .font(.system(size: 56, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .padding(.top)
+
+                Text("Create a New Account")
+                    .font(.title2.bold())
+
+                Text("Use your device camera to scan your HKID card or Passport. This is a simulation; no data is sent to a server.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+
+                if let img = capturedImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(alignment: .bottomLeading) {
+                            if let doc = selectedDoc {
+                                Text("Scanned: \(doc.displayName)")
+                                    .font(.caption)
+                                    .padding(6)
+                                    .background(.thinMaterial, in: Capsule())
+                                    .padding(8)
+                            }
+                        }
+                }
+
+                HStack {
+                    Button {
+                        router.confirm(title: "Scan HKID", message: "Open camera to scan your HKID?", confirmLabel: "Scan", icon: "camera") {
+                            selectedDoc = .hkid
+                            showCamera = true
+                        }
+                    } label: {
+                        Label("Scan HKID", systemImage: "camera")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        router.confirm(title: "Scan Passport", message: "Open camera to scan your Passport?", confirmLabel: "Scan", icon: "camera") {
+                            selectedDoc = .passport
+                            showCamera = true
+                        }
+                    } label: {
+                        Label("Scan Passport", systemImage: "camera")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if capturedImage != nil {
+                    Button {
+                        router.confirm(title: "Create Account", message: "Proceed to create your bank account with the scanned document? (Simulation)", confirmLabel: "Create", icon: "person.badge.plus") {
+                            router.confirm(title: "Account Created", message: "Your bank account has been created (simulation).", confirmLabel: "Done", icon: "checkmark.circle") {
+                                router.confirmBack(info: "Return to previous screen.")
+                            }
+                        }
+                    } label: {
+                        Text("Create Account")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Text("Note: Please add NSCameraUsageDescription to your Info.plist for camera access.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 8)
+            }
+            .padding()
+        }
+        .navigationTitle("Create Account")
+        .navigationBarBackButtonHidden(true)
+        .toolbar { ConfirmingBackToolbar() }
+        .sheet(isPresented: $showCamera) {
+            CameraCaptureView(image: $capturedImage)
+                .ignoresSafeArea()
+        }
+    }
+}
+
+struct CameraCaptureView: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var image: UIImage?
+
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: CameraCaptureView
+        init(_ parent: CameraCaptureView) { self.parent = parent }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let img = info[.originalImage] as? UIImage {
+                parent.image = img
+            }
+            parent.dismiss()
+        }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            picker.sourceType = .camera
+        } else {
+            picker.sourceType = .photoLibrary
+        }
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) { }
+}
+
+// MARK: - Statements
+struct StatementItem: Identifiable {
+    let id = UUID()
+    let title: String
+}
+
+struct StatementsView: View {
+    @EnvironmentObject private var router: Router
+    @State private var viewingStatement: StatementItem?
+
+    private let bankMonths = ["Jan 2026", "Feb 2026", "Mar 2026"]
+    private let investmentMonths = ["Jan 2026", "Feb 2026", "Mar 2026"]
+
+    var body: some View {
+        List {
+            Section("Bank Statements") {
+                ForEach(bankMonths, id: \.self) { month in
+                    Button(month) {
+                        router.confirm(title: "Open Statement", message: "Open bank statement for \(month)?", confirmLabel: "Open", icon: "doc.text") {
+                            viewingStatement = StatementItem(title: "Bank Statement - \(month)")
+                        }
+                    }
+                }
+            }
+            Section("Investment Statements") {
+                ForEach(investmentMonths, id: \.self) { month in
+                    Button(month) {
+                        router.confirm(title: "Open Statement", message: "Open investment statement for \(month)?", confirmLabel: "Open", icon: "doc.text") {
+                            viewingStatement = StatementItem(title: "Investment Statement - \(month)")
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Statements")
+        .navigationBarBackButtonHidden(true)
+        .toolbar { ConfirmingBackToolbar() }
+        .sheet(item: $viewingStatement) { item in
+            StatementDetailView(title: item.title)
+        }
+    }
+}
+
+struct StatementDetailView: View, Identifiable {
+    let id = UUID()
+    let title: String
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(title)
+                .font(.title2.bold())
+            Spacer()
+            Image(systemName: "doc.richtext")
+                .font(.system(size: 64))
+                .foregroundStyle(.secondary)
+            Text("PDF preview (simulation)")
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding()
     }
 }
 
@@ -310,6 +534,14 @@ struct DashboardView: View {
                         }
                     }
                     GridRow {
+                        ActionCard(title: "Statements", subtitle: "Monthly statements", systemImage: "doc.text.magnifyingglass") {
+                            router.confirmThenPush(.statements, info: "View your monthly bank and investment statements.")
+                        }
+                        ActionCard(title: "Investments", subtitle: "Buy & sell stocks", systemImage: "chart.line.uptrend.xyaxis") {
+                            router.confirmThenPush(.investment, info: "Access your investment account to buy and sell stocks.")
+                        }
+                    }
+                    GridRow {
                         ActionCard(title: "Support", subtitle: "We're here to help", systemImage: "person.fill.questionmark") {
                             router.confirmThenPush(.support, info: "Contact support, find FAQs, and secure messages.")
                         }
@@ -320,6 +552,15 @@ struct DashboardView: View {
                 }
             }
             .padding()
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    router.confirmThenPush(.support, info: "Contact support by phone or email.")
+                } label: {
+                    Label("Support", systemImage: "lifepreserver")
+                }
+            }
         }
     }
 
@@ -332,6 +573,57 @@ struct DashboardView: View {
                 .font(.largeTitle.bold())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct InvestmentView: View {
+    @EnvironmentObject private var router: Router
+
+    private struct Position: Identifiable { let id = UUID(); let symbol: String; let shares: Double; let value: Double }
+    private let positions = [
+        Position(symbol: "AAPL", shares: 12, value: 2400),
+        Position(symbol: "TSLA", shares: 5, value: 1100),
+        Position(symbol: "0700.HK", shares: 30, value: 12000)
+    ]
+
+    var body: some View {
+        List {
+            Section("Positions") {
+                ForEach(positions) { p in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(p.symbol).font(.headline)
+                            Text("Shares: \(p.shares, specifier: "%.2f")").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(currency(p.value)).monospacedDigit().font(.headline)
+                    }
+                }
+            }
+
+            Section("Actions") {
+                Button("Buy Stock") {
+                    router.confirm(title: "Buy Stock", message: "Proceed to buy stock?", confirmLabel: "Buy", icon: "cart.badge.plus") {
+                        router.confirm(title: "Order Placed", message: "Your buy order has been submitted (simulation).", confirmLabel: "OK", icon: "checkmark.circle") { }
+                    }
+                }
+                Button("Sell Stock") {
+                    router.confirm(title: "Sell Stock", message: "Proceed to sell stock?", confirmLabel: "Sell", icon: "cart.badge.minus") {
+                        router.confirm(title: "Order Placed", message: "Your sell order has been submitted (simulation).", confirmLabel: "OK", icon: "checkmark.circle") { }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Investments")
+        .navigationBarBackButtonHidden(true)
+        .toolbar { ConfirmingBackToolbar() }
+    }
+
+    private func currency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = .current
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }
 
@@ -573,9 +865,22 @@ struct SupportView: View {
 
     var body: some View {
         List {
-            Text("Contact Us")
-            Text("Secure Messages")
-            Text("FAQs")
+            Section("Contact") {
+                LabeledContent("Phone", value: "+852 1234 5678")
+                LabeledContent("Email", value: "support@bankapp.example")
+            }
+            Section("Actions") {
+                Button("Call Support") {
+                    router.confirm(title: "Call Support", message: "Call +852 1234 5678? (Simulation)", confirmLabel: "Call", icon: "phone") { }
+                }
+                Button("Email Support") {
+                    router.confirm(title: "Email Support", message: "Compose email to support@bankapp.example? (Simulation)", confirmLabel: "Compose", icon: "envelope") { }
+                }
+            }
+            Section("FAQs") {
+                Text("How do I reset my password?")
+                Text("How do I change my address?")
+            }
         }
         .navigationTitle("Support")
         .navigationBarBackButtonHidden(true)
